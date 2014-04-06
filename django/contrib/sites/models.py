@@ -8,23 +8,30 @@ SITE_CACHE = {}
 
 class SiteManager(models.Manager):
 
-    def get_current(self):
+    def get_current(self, request=None):
         """
         Returns the current ``Site`` based on the SITE_ID in the
-        project's settings. The ``Site`` object is cached the first
-        time it's retrieved from the database.
+        project's settings or the domain in the request. The
+        ``Site`` object is cached the first time it's retrieved
+        from the database.
         """
         from django.conf import settings
-        try:
+        if getattr(settings, 'SITE_ID'):
             sid = settings.SITE_ID
-        except AttributeError:
-            from django.core.exceptions import ImproperlyConfigured
-            raise ImproperlyConfigured("You're using the Django \"sites framework\" without having set the SITE_ID setting. Create a site in your database and set the SITE_ID setting to fix this error.")
-        try:
-            current_site = SITE_CACHE[sid]
-        except KeyError:
-            current_site = self.get(pk=sid)
-            SITE_CACHE[sid] = current_site
+            try:
+                current_site = SITE_CACHE[sid]
+            except KeyError:
+                current_site = self.get(pk=sid)
+                SITE_CACHE[sid] = current_site
+        elif request:
+            domain = request.META['SERVER_NAME']
+            try:
+                current_site = SITE_CACHE[domain]
+            except KeyError:
+                current_site = self.get(domain=domain)
+                SITE_CACHE[domain] = current_site
+        else:
+            raise Site.DoesNotExist()
         return current_site
 
     def clear_cache(self):
@@ -36,7 +43,7 @@ class SiteManager(models.Manager):
 @python_2_unicode_compatible
 class Site(models.Model):
 
-    domain = models.CharField(_('domain name'), max_length=100)
+    domain = models.CharField(_('domain name'), max_length=100, db_index=True)
     name = models.CharField(_('display name'), max_length=50)
     objects = SiteManager()
 
@@ -92,7 +99,7 @@ def get_current_site(request):
     ``Site`` object or a ``RequestSite`` object based on the request.
     """
     if Site._meta.installed:
-        current_site = Site.objects.get_current()
+        current_site = Site.objects.get_current(request)
     else:
         current_site = RequestSite(request)
     return current_site
