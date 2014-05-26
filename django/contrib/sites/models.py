@@ -1,3 +1,5 @@
+from request_provider.signals import get_request
+
 from django.db import models
 from django.utils.translation import ugettext_lazy as _
 from django.utils.encoding import python_2_unicode_compatible
@@ -15,6 +17,7 @@ class SiteManager(models.Manager):
         ``Site`` object is cached the first time it's retrieved
         from the database.
         """
+        request = get_request()
         from django.conf import settings
         if hasattr(settings, 'SITE_ID'):
             sid = settings.SITE_ID
@@ -23,15 +26,14 @@ class SiteManager(models.Manager):
             except KeyError:
                 current_site = self.get(pk=sid)
                 SITE_CACHE[sid] = current_site
-        elif request:
-            domain = request.META['SERVER_NAME']
+        else:
+            domain = request.META["HTTP_HOST"].split(':')[0]
             try:
                 current_site = SITE_CACHE[domain]
             except KeyError:
-                current_site = self.get(domain=domain)
+                # This is quite a loose lookup as we want to match example.com when accessed on example.epixstudios.co.uk
+                current_site = self.get(domain__icontains=domain.split('.')[0])
                 SITE_CACHE[domain] = current_site
-        else:
-            raise Site.DoesNotExist()
         return current_site
 
     def clear_cache(self):
