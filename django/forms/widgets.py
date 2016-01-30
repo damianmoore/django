@@ -897,6 +897,8 @@ class SplitDateTimeWidget(MultiWidget):
         super(SplitDateTimeWidget, self).__init__(widgets, attrs)
 
     def decompress(self, value):
+        if isinstance(value, basestring):
+            value = datetime.datetime.strptime(value, '%Y-%m-%d %H:%M')
         if value:
             value = to_current_timezone(value)
             return [value.date(), value.time().replace(microsecond=0)]
